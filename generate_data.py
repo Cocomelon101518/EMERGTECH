@@ -5,8 +5,8 @@ import os
 def generate_daily_data(day=1, num_records=25, save_to_disk=False):
     """
     Generates synthetic machine data for a specific day and optionally saves it.
+    Ensures the initial dataset (Day 1) contains at least one failure.
     """
-    # Create directory if it doesn't exist
     if not os.path.exists('simulation_data'):
         os.makedirs('simulation_data')
 
@@ -37,7 +37,18 @@ def generate_daily_data(day=1, num_records=25, save_to_disk=False):
     }
     df = pd.DataFrame(data)
 
-    # Determine failure
+    # On Day 1, guarantee at least one failure and one non-failure for robust model training
+    if day == 1:
+        # Guarantee a failure
+        df.loc[0, 'Temperature'] = 90
+        df.loc[0, 'Vibration'] = 0.8
+        # Guarantee a non-failure
+        df.loc[1, 'Temperature'] = 60
+        df.loc[1, 'Vibration'] = 0.4
+        df.loc[1, 'Hours_Used'] = 100
+        df.loc[1, 'Sound_Level'] = 55
+
+    # Determine failure based on thresholds
     failure = (
         (df['Temperature'] > 85) |
         (df['Vibration'] > 0.7) |
@@ -49,13 +60,11 @@ def generate_daily_data(day=1, num_records=25, save_to_disk=False):
     if save_to_disk:
         filepath = os.path.join('simulation_data', f'day_{day}.csv')
         df.to_csv(filepath, index=False)
-        # Also update the main machine_data.csv for the initial model training
         if day == 1:
             df.to_csv('machine_data.csv', index=False)
 
     return df
 
 if __name__ == "__main__":
-    # Generate data for day 1 and save it
     generate_daily_data(day=1, save_to_disk=True)
-    print("Generated and saved initial data for Day 1.")
+    print("Generated and saved initial data for Day 1 with guaranteed failure case.")
