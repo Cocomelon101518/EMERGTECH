@@ -1,56 +1,112 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 import pandas as pd
 import joblib
 import os
+from generate_data import generate_daily_data
+from model_training import retrain_model_with_history, train_initial_model
 
 app = Flask(__name__)
+app.secret_key = 'a_very_secret_key_for_flask_sessions'
 
-# Load the trained model
-try:
-    model = joblib.load('model.pkl')
-except FileNotFoundError:
-    # This is a fallback for development, in a real scenario the model must exist
-    model = None
-    print("Model not found. Please train the model first by running `model_training.py`.")
+def load_model():
+    """Loads the model from disk."""
+    try:
+        return joblib.load('model.pkl')
+    except FileNotFoundError:
+        return None
 
-@app.route('/', methods=['GET', 'POST'])
+def get_recommendation(machine):
+    """Generates a recommendation based on machine status."""
+    prob = machine['Failure_Probability_Value']
+    hours = machine['Hours_Used']
+
+    if machine['Failure_Prediction'] == 1:
+        if prob > 0.9:
+            return "Critical failure risk. Immediate replacement recommended."
+        elif prob > 0.75:
+            return "High failure risk. Schedule replacement soon. Repair is likely not cost-effective."
+        else:
+            return "Failure predicted. Immediate inspection and maintenance required."
+    else:
+        if hours > 400:
+            return "Machine has high usage but is in good condition. Monitor closely and consider proactive maintenance."
+        elif prob > 0.3:
+            return "Condition is acceptable, but failure risk is rising. Schedule a preventive check-up."
+        else:
+            return "Machine is in good condition. Continue normal operation and routine checks."
+
+@app.route('/')
 def index():
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            return redirect(request.url)
-        file = request.files['file']
-        if file.filename == '':
-            return redirect(request.url)
-        if file and file.filename.endswith('.csv'):
-            # Save the uploaded file temporarily
-            filepath = os.path.join('uploads', file.filename)
-            if not os.path.exists('uploads'):
-                os.makedirs('uploads')
-            file.save(filepath)
+    if 'day' not in session:
+        session['day'] = 1
 
-            # Process the data
-            data = pd.read_csv(filepath)
-            features = ['Temperature', 'Vibration', 'Pressure', 'Sound_Level', 'Hours_Used']
+    day = session['day']
+    data_filepath = os.path.join('simulation_data', f'day_{day}.csv')
 
-            if not all(feature in data.columns for feature in features):
-                # Handle missing columns
-                return render_template('index.html', error=f"CSV must contain: {', '.join(features)}")
+    # Generate data for the current day if it doesn't exist
+    if not os.path.exists(data_filepath):
+        generate_daily_data(day=day, save_to_disk=True)
 
-            if model:
-                predictions = model.predict(data[features])
-                prediction_proba = model.predict_proba(data[features])
-                data['Failure_Prediction'] = predictions
-                data['Failure_Probability'] = [f"{p:.2%}" for p in prediction_proba[:, 1]]
-                results = data.to_dict(orient='records')
-            else:
-                results = None
+    # Read the data for the current day
+    data = pd.read_csv(data_filepath)
 
-            # Clean up the uploaded file
-            os.remove(filepath)
+    model = load_model()
+    results = []
+    if model:
+        features = ['Temperature', 'Vibration', 'Pressure', 'Sound_Level', 'Hours_Used']
 
-            return render_template('index.html', results=results, columns=data.columns)
+        if all(feature in data.columns for feature in features):
+            predictions = model.predict(data[features])
+            prediction_proba = model.predict_proba(data[features])
 
-    return render_template('index.html', results=None)
+            data['Failure_Prediction'] = predictions
+            data['Failure_Probability_Value'] = prediction_proba[:, 1]
+            data['Failure_Probability'] = [f"{p:.2%}" for p in prediction_proba[:, 1]]
+            data['Recommendation'] = data.apply(get_recommendation, axis=1)
+
+            results = data.to_dict(orient='records')
+        else:
+            flash("The data file is missing required columns.", "danger")
+    else:
+        flash("Model not found. Please train the initial model by running model_training.py.", "danger")
+
+    return render_template('index.html', results=results, day=day)
+
+@app.route('/next_day')
+def next_day():
+    if 'day' in session:
+        session['day'] += 1
+    else:
+        session['day'] = 1
+
+    # Pre-generate data for the new day
+    generate_daily_data(day=session['day'], save_to_disk=True)
+
+    return redirect(url_for('index'))
+
+@app.route('/report_issue/<machine_id>')
+def report_issue(machine_id):
+    """Triggers model re-training when a machine issue is reported."""
+    flash(f"Issue reported for {machine_id}. Re-training model with all historical data to improve future predictions.", "info")
+
+    if retrain_model_with_history():
+        flash("Model successfully re-trained with updated data.", "success")
+    else:
+        flash("Could not re-train the model. No historical data found.", "warning")
+
+    return redirect(url_for('index'))
+
+@app.route('/reset')
+def reset():
+    """Resets the simulation back to Day 1."""
+    session['day'] = 1
+    # For a true reset, we might clear simulation_data and retrain,
+    # but for now, just going to day 1 is sufficient.
+    flash("Simulation has been reset to Day 1.", "info")
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
+    # Ensure the initial model exists on startup
+    if not os.path.exists('model.pkl'):
+        train_initial_model()
     app.run(debug=True, port=5001)

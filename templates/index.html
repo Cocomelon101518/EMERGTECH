@@ -3,74 +3,95 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>AI Predictive Maintenance</title>
+    <title>AI Predictive Maintenance Simulation</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
-        body {
-            padding: 2rem;
-        }
-        .header {
-            margin-bottom: 2rem;
-        }
-        .results-table {
-            margin-top: 2rem;
-        }
-        .high-risk {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-        .low-risk {
-            background-color: #d4edda;
-            color: #155724;
-        }
+        body { padding: 2rem; }
+        .header { margin-bottom: 2rem; }
+        .results-table { margin-top: 2rem; }
+        .high-risk { background-color: #f8d7da; color: #721c24; }
+        .good-condition { background-color: #d4edda; color: #155724; }
+        .needs-inspection { background-color: #fff3cd; color: #856404; }
+        .flash-messages { margin-top: 1rem; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header text-center">
-            <h1>AI-Powered Predictive Maintenance Dashboard</h1>
-            <p class="lead">Upload your machine sensor data to predict equipment failures.</p>
+            <h1>AI Predictive Maintenance Simulation</h1>
+            <p class="lead">Simulating daily machine sensor data to predict failures and improve the model over time.</p>
+            <h3>Current Day: {{ day }}</h3>
         </div>
 
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Upload CSV File</h5>
-                <form method="post" enctype="multipart/form-data">
-                    <div class="form-group">
-                        <input type="file" class="form-control-file" name="file" accept=".csv" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Predict Failures</button>
-                </form>
-            </div>
+        <div class="text-center mb-4">
+            <a href="{{ url_for('next_day') }}" class="btn btn-primary">Advance to Next Day</a>
+            <a href="{{ url_for('reset') }}" class="btn btn-secondary">Reset to Day 1</a>
         </div>
 
-        {% if error %}
-            <div class="alert alert-danger mt-3">{{ error }}</div>
-        {% endif %}
+        <div class="flash-messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
 
         {% if results %}
-            <div class="results-table">
-                <h3>Prediction Results</h3>
+            <div class="daily-reports">
+                <h3>Daily Reports</h3>
                 <table class="table table-bordered">
                     <thead class="thead-light">
                         <tr>
-                            {% for col in columns %}
-                                <th>{{ col }}</th>
-                            {% endfor %}
+                            <th>Machine ID</th>
+                            <th>Status</th>
+                            <th>Failure Probability</th>
+                            <th>Recommendations</th>
+                            <th>Report Issue</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for row in results %}
-                            <tr class="{{ 'high-risk' if row.Failure_Prediction == 1 else 'low-risk' }}">
-                                {% for col in columns %}
-                                    <td>{{ row[col] }}</td>
-                                {% endfor %}
+                        {% for machine in results %}
+                            {% set status_class = 'good-condition' %}
+                            {% set status_text = 'Good Condition' %}
+                            {% if machine.Failure_Prediction == 1 %}
+                                {% set status_class = 'high-risk' %}
+                                {% set status_text = 'Repair/Replace' %}
+                            {% elif machine.Failure_Probability_Value > 0.3 %}
+                                {% set status_class = 'needs-inspection' %}
+                                {% set status_text = 'Needs Inspection' %}
+                            {% endif %}
+                            <tr class="{{ status_class }}">
+                                <td>{{ machine.Machine_ID }}</td>
+                                <td>{{ status_text }}</td>
+                                <td>{{ machine.Failure_Probability }}</td>
+                                <td>
+                                    <button class="btn btn-info btn-sm" onclick="showRecommendation('{{ machine.Recommendation }}')">
+                                        View
+                                    </button>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('report_issue', machine_id=machine.Machine_ID) }}" class="btn btn-danger btn-sm">
+                                        Not Operating
+                                    </a>
+                                </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+        {% else %}
+            <div class="alert alert-warning mt-3">
+                No data to display. Please ensure the model is trained.
+            </div>
         {% endif %}
     </div>
+
+    <script>
+        function showRecommendation(recommendation) {
+            alert(recommendation);
+        }
+    </script>
 </body>
 </html>
