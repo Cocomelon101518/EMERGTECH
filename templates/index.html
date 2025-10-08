@@ -8,11 +8,14 @@
     <style>
         body { padding: 2rem; }
         .header { margin-bottom: 2rem; }
-        .results-table { margin-top: 2rem; }
+        .daily-reports { margin-top: 2rem; }
         .high-risk { background-color: #f8d7da; color: #721c24; }
         .good-condition { background-color: #d4edda; color: #155724; }
         .needs-inspection { background-color: #fff3cd; color: #856404; }
+        .not-operating { text-decoration: line-through; background-color: #e9ecef; }
         .flash-messages { margin-top: 1rem; }
+        details { cursor: pointer; }
+        .machine-details { padding: 0.5rem; background-color: #f8f9fa; border-radius: 4px; margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -25,14 +28,19 @@
 
         <div class="text-center mb-4">
             <a href="{{ url_for('next_day') }}" class="btn btn-primary">Advance to Next Day</a>
-            <a href="{{ url_for('reset') }}" class="btn btn-secondary">Reset to Day 1</a>
+            <a href="{{ url_for('reset') }}" class="btn btn-danger">Reset Simulation</a>
         </div>
 
         <div class="flash-messages">
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}">{{ message }}</div>
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
                     {% endfor %}
                 {% endif %}
             {% endwith %}
@@ -44,50 +52,60 @@
                 <table class="table table-bordered">
                     <thead class="thead-light">
                         <tr>
-                            <th>Machine ID</th>
+                            <th>Machine Details</th>
                             <th>Status</th>
                             <th>Failure Probability</th>
-                            <th>Recommendations</th>
-                            <th>Report Issue</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for machine in results %}
-                            {% set status_class = 'good-condition' %}
-                            {% set status_text = 'Good Condition' %}
-                            {% if machine.Failure_Prediction == 1 %}
+                            {% set status_class = '' %}
+                            {% set status_text = machine.Status %}
+                            {% if machine.Status == 'Not Operating' %}
+                                {% set status_class = 'not-operating' %}
+                            {% elif machine.Failure_Prediction == 1 %}
                                 {% set status_class = 'high-risk' %}
-                                {% set status_text = 'Repair/Replace' %}
                             {% elif machine.Failure_Probability_Value > 0.3 %}
                                 {% set status_class = 'needs-inspection' %}
-                                {% set status_text = 'Needs Inspection' %}
+                            {% else %}
+                                {% set status_class = 'good-condition' %}
                             {% endif %}
                             <tr class="{{ status_class }}">
-                                <td>{{ machine.Machine_ID }}</td>
+                                <td>
+                                    <details>
+                                        <summary>{{ machine.Machine_ID }}</summary>
+                                        <div class="machine-details">
+                                            <strong>Temperature:</strong> {{ "%.2f"|format(machine.Temperature) }}<br>
+                                            <strong>Vibration:</strong> {{ "%.3f"|format(machine.Vibration) }}<br>
+                                            <strong>Pressure:</strong> {{ "%.2f"|format(machine.Pressure) }}<br>
+                                            <strong>Sound Level:</strong> {{ "%.2f"|format(machine.Sound_Level) }}<br>
+                                            <strong>Hours Used:</strong> {{ machine.Hours_Used }}
+                                        </div>
+                                    </details>
+                                </td>
                                 <td>{{ status_text }}</td>
                                 <td>{{ machine.Failure_Probability }}</td>
                                 <td>
-                                    <button class="btn btn-info btn-sm" onclick="showRecommendation('{{ machine.Recommendation }}')">
-                                        View
-                                    </button>
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('report_issue', machine_id=machine.Machine_ID) }}" class="btn btn-danger btn-sm">
-                                        Not Operating
-                                    </a>
+                                    {% if machine.Status == 'Not Operating' %}
+                                        <a href="{{ url_for('resolve_issue', machine_id=machine.Machine_ID, action='Repaired') }}" class="btn btn-success btn-sm">Mark as Repaired</a>
+                                        <a href="{{ url_for('resolve_issue', machine_id=machine.Machine_ID, action='Replaced') }}" class="btn btn-warning btn-sm">Mark as Replaced</a>
+                                    {% else %}
+                                        <button class="btn btn-info btn-sm" onclick="showRecommendation('{{ machine.Recommendation }}')">Recommendation</button>
+                                        <a href="{{ url_for('report_issue', machine_id=machine.Machine_ID) }}" class="btn btn-danger btn-sm">Report Issue</a>
+                                    {% endif %}
                                 </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-        {% else %}
-            <div class="alert alert-warning mt-3">
-                No data to display. Please ensure the model is trained.
-            </div>
         {% endif %}
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script>
         function showRecommendation(recommendation) {
             alert(recommendation);
