@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>AI Predictive Maintenance</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            padding: 2rem;
+        }
+        .header {
+            margin-bottom: 2rem;
+        }
+        .results-table {
+            margin-top: 2rem;
+        }
+        .high-risk {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .low-risk {
+            background-color: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header text-center">
+            <h1>AI-Powered Predictive Maintenance Dashboard</h1>
+            <p class="lead">Upload your machine sensor data to predict equipment failures.</p>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Upload CSV File</h5>
+                <form method="post" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <input type="file" class="form-control-file" name="file" accept=".csv" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Predict Failures</button>
+                </form>
+            </div>
+        </div>
+
+        {% if error %}
+            <div class="alert alert-danger mt-3">{{ error }}</div>
+        {% endif %}
+
+        {% if results %}
+            <div class="results-table">
+                <h3>Prediction Results</h3>
+                <table class="table table-bordered">
+                    <thead class="thead-light">
+                        <tr>
+                            {% for col in columns %}
+                                <th>{{ col }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in results %}
+                            <tr class="{{ 'high-risk' if row.Failure_Prediction == 1 else 'low-risk' }}">
+                                {% for col in columns %}
+                                    <td>{{ row[col] }}</td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
